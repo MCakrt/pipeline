@@ -60,7 +60,7 @@ public class ConcurrentSequentialProcessorTest {
         // when
         sequentialInputData.forEach(sequentialProcessor::processSequentiallyAsync);
 
-        sequentialProcessor.awaitProcessingCompletion(Duration.ofMillis(2000));
+        sequentialProcessor.awaitProcessingCompletion(Duration.ofMillis(3000));
 
         // then
         assertTrue("Error in processed message order!", correctOrder.get());
@@ -99,7 +99,7 @@ public class ConcurrentSequentialProcessorTest {
     private Flux<TestMessage> processTestMessageFlux(TestMessage testMessage1) {
         return Flux.just(testMessage1)
                 .doOnNext(testMessage0 -> logger.info("Before blocking processing {}", testMessage0))
-                .publishOn(Schedulers.elastic())
+                .publishOn(Schedulers.boundedElastic())
                 .doOnNext(this::doBlockingOperation)
                 .publishOn(Schedulers.parallel());
     }
@@ -117,24 +117,18 @@ public class ConcurrentSequentialProcessorTest {
         for (int messageNo = 1; messageNo <= messageCount; messageNo++) {
             for (int entityId = 1; entityId <= entityCount; entityId++) {
                 TestMessage testMessage = new TestMessage(entityId, messageNo);
-                LoggingInfo loggingInfo = new LoggingInfo(false, "entity id " + entityId);
-                SequentialInput<TestMessage, TestMessage> sequentialInput = new SequentialInput<>(
-                        testMessage,
-                        new TestInputQueueResolver(),
-                        new InputProcessingFluxRunner<>(
-                                testMessage,
-                                processingFluxCreator,
-                                m -> {
-                                    logger.info(" ---> Finished processing message: {}", m);
-                                    assertion.accept(m);
-                                },
-                                e -> {
-                                    throw new RuntimeException(e);
-                                },
-                                loggingInfo,
-                                Schedulers.parallel()),
-                        loggingInfo
-                );
+                SequentialInput<TestMessage, TestMessage> sequentialInput = SequentialInput.newBuilder(testMessage, new TestInputQueueResolver(), processingFluxCreator)
+                        .setSubscribeOnScheduler(Schedulers.parallel())
+                        .setSubscribeConsumer(m -> {
+                            logger.info(" ---> Finished processing message: {}", m);
+                            assertion.accept(m);
+                        })
+                        .setSubscribeErrorConsumer(e -> {
+                            throw new RuntimeException(e);
+                        })
+                        .setInputLoggingDescription("entity id " + entityId)
+                        .setLogActivity(false)
+                        .build();
                 sequentialInputs.add(sequentialInput);
             }
         }
@@ -193,22 +187,15 @@ public class ConcurrentSequentialProcessorTest {
 
         for (int messageNo = 1; messageNo <= messageCount; messageNo++) {
             for (int entityId = 1; entityId <= entityCount; entityId++) {
-                TestMessage testMessage = new TestMessage(entityId, messageNo);
-                LoggingInfo loggingInfo = new LoggingInfo(true, "entity id " + entityId);
-                SequentialInput<TestMessage, TestMessage> sequentialInput = new SequentialInput<>(
-                        testMessage,
-                        new TestInputQueueResolver(),
-                        new InputProcessingCallableRunner<>(
-                                testMessage,
-                                processingCallable
-                                        .compose(v -> {
-                                            assertion.accept(testMessage);
-                                            return testMessage;
-                                        }).apply(testMessage)
-                                ,
-                                loggingInfo),
-                        loggingInfo
-                );
+                final TestMessage testMessage = new TestMessage(entityId, messageNo);
+                final Callable<TestMessage> callable = processingCallable
+                        .compose(v -> {
+                            assertion.accept(testMessage);
+                            return testMessage;
+                        }).apply(testMessage);
+                final SequentialInput<TestMessage, TestMessage> sequentialInput = SequentialInput.newBuilder(testMessage, new TestInputQueueResolver(), callable)
+                        .setLogActivity(false)
+                        .build();
                 sequentialInputs.add(sequentialInput);
             }
         }

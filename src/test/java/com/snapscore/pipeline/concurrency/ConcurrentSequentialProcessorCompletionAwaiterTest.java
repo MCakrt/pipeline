@@ -118,13 +118,12 @@ public class ConcurrentSequentialProcessorCompletionAwaiterTest {
 
 
     private Flux<TestMessage> processTestMessageFlux(TestMessage testMessage1) {
-        Flux<TestMessage> testMessageProcessingFlux = Flux.just(testMessage1)
+        return Flux.just(testMessage1)
                 .publishOn(Schedulers.parallel())
                 .doOnNext(testMessage2 -> doSomeHeavyProcessing(testMessage2))
                 .publishOn(Schedulers.single())
                 .doOnNext(testMessage2 -> doSomeHeavyProcessing(testMessage2))
                 .publishOn(Schedulers.single());
-        return testMessageProcessingFlux;
     }
 
     public List<SequentialInput<TestMessage, TestMessage>> createSequentialMessage(int entityCount,
@@ -146,25 +145,13 @@ public class ConcurrentSequentialProcessorCompletionAwaiterTest {
     private SequentialInput<TestMessage, TestMessage> createSequentialInput(Function<TestMessage, Flux<TestMessage>> processingFluxCreator,
                                                                             int entityId,
                                                                             TestMessage testMessage) {
-
-        LoggingInfo loggingInfo = new LoggingInfo(true, "entity id " + entityId);
-
-        SequentialInput<TestMessage, TestMessage> sequentialInput = new SequentialInput<>(
-                testMessage,
-                new TestInputQueueResolver(),
-                new InputProcessingFluxRunner<>(
-                        testMessage,
-                        processingFluxCreator,
-                        m -> {
-                        },
-                        e -> {
-                            throw new RuntimeException(e);
-                        },
-                        loggingInfo,
-                        Schedulers.parallel()),
-                loggingInfo
-        );
-        return sequentialInput;
+        return SequentialInput.newBuilder(testMessage, new TestInputQueueResolver(), processingFluxCreator)
+                .setInputLoggingDescription("entity id " + entityId)
+                .setSubscribeOnScheduler(Schedulers.parallel())
+                .setSubscribeErrorConsumer(e -> {
+                    throw new RuntimeException(e);
+                })
+                .build();
     }
 
     private void doSomeHeavyProcessing(TestMessage testMessage) {

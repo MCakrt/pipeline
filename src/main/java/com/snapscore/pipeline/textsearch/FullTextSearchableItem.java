@@ -5,7 +5,8 @@ import java.util.Collection;
 public interface FullTextSearchableItem {
 
     /**
-     * @return the name by which this item can be looked up
+     * @return the name by which this item can be looked up; The user of this should not perform any splitting of the names by spaces. This is handled by the library.
+     * Example: for the stage "UEFA" we might want to return a list like this ["UEFA", "UEFA Champions League"]
      */
     Collection<String> getSearchableNames();
 

@@ -50,21 +50,30 @@ public class VertxHttpClientImpl implements HttpClient {
             RequestOptions requestOptions = new RequestOptions()
                     .setHost(httpClientConfig.host()) // TODO actually it might be good to have this as part of the request as well and if available then it should overwrite the general config value?
                     .setPort(httpClientConfig.port()) // TODO actually it might be good to have this as part of the request as well and if available then it should overwrite the general config value?
-                    .setURI(feedRequest.getUrl());
+                    .setURI(feedRequest.getUrl())
+                    .setTimeout(httpClientConfig.readTimeout().toMillis())
+                    .setMethod(HttpMethod.GET);
             for (FeedRequestHttpHeader httpHeader : feedRequest.getHttpHeaders()) {
                 requestOptions.addHeader(httpHeader.getKey(), httpHeader.getValue());
             }
 
-            HttpClientRequest request = client.request(
-                    HttpMethod.GET,
-                    requestOptions,
-                    response -> clientCallback.onResponse(response)
+            client.request(
+                requestOptions,
+                requestAsyncResult -> {
+                    if (requestAsyncResult.succeeded()) {
+                        HttpClientRequest requestSuccess = requestAsyncResult.result();
+                        requestSuccess.send(responseAsyncResult -> {
+                            if (responseAsyncResult.succeeded()) {
+                                clientCallback.onResponse(responseAsyncResult.result());
+                            } else {
+                                clientCallback.handleException(requestAsyncResult.cause());
+                            }
+                        });
+                    } else {
+                        clientCallback.handleException(requestAsyncResult.cause());
+                    }
+                }
             );
-
-            request.setTimeout(httpClientConfig.readTimeout().toMillis());
-
-            request.exceptionHandler(throwable -> clientCallback.handleException(throwable))
-                    .end();
 
             logger.decorateSetup(mdc -> mdc.analyticsId("http_client_got_accepted_rq")).info("HttpClient accepted new request: {}", feedRequest.toStringBasicInfo());
 

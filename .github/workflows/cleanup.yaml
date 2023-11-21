@@ -1,0 +1,11 @@
+name: Packages cleanup
+on: push
+jobs:
+  clean:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Delete old packages
+        uses: actions/delete-package-versions@v3
+        with:
+          package-name: com.snapscore.pipeline
+          min-versions-to-keep: 10

@@ -3,7 +3,6 @@ package com.snapscore.pipeline.textsearch;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.awt.*;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -34,7 +33,7 @@ public class FullTextSearchRepositoryImplTest {
 
     @Test
     public void addItem() {
-        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestTrieCache");
+        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo");
         trieCache.addItem(team1);
         trieCache.addItem(team2);
         trieCache.addItem(team3);
@@ -48,12 +47,8 @@ public class FullTextSearchRepositoryImplTest {
     @Test
     public void removeItem() {
         // given
-        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestTrieCache");
-        trieCache.addItem(team1);
-        trieCache.addItem(team2);
-        trieCache.addItem(team3);
-        trieCache.addItem(team4);
-        trieCache.addItem(team5);
+        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo");
+        addAllTeams(trieCache);
 
         trieCache.removeItem(team2);
 
@@ -77,12 +72,8 @@ public class FullTextSearchRepositoryImplTest {
     @Test
     public void removeItemById() {
         // given
-        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestTrieCache");
-        trieCache.addItem(team1);
-        trieCache.addItem(team2);
-        trieCache.addItem(team3);
-        trieCache.addItem(team4);
-        trieCache.addItem(team5);
+        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo");
+        addAllTeams(trieCache);
 
         trieCache.removeItemById(team2.getIdentifier());
 
@@ -106,12 +97,8 @@ public class FullTextSearchRepositoryImplTest {
     @Test
     public void findMatchingItemsForMultiWordInput() {
 
-        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestTrieCache");
-        trieCache.addItem(team1);
-        trieCache.addItem(team2);
-        trieCache.addItem(team3);
-        trieCache.addItem(team4);
-        trieCache.addItem(team5);
+        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo");
+        addAllTeams(trieCache);
 
         List<TestTeam> matchingItems = trieCache.findMatchingItems("Ame te", 100, predicateTrue);
         assertEquals(List.of(team3), matchingItems);
@@ -125,11 +112,11 @@ public class FullTextSearchRepositoryImplTest {
 
     @Test
     public void findMatchingItemsExcludePredicate() {
-        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestTrieCache");
+        FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo");
         trieCache.addItem(team3);
         trieCache.addItem(team4);
 
-        Predicate<FullTextSearchableItem> predicate = p -> !((TestTeam) p).isPlaceHolder;
+        Predicate<FullTextSearchableItem> predicate = p -> !((TestTeam) p).placeholder;
 
         List<TestTeam> collect = List.of(team3).stream().filter(predicate).collect(Collectors.toList());
         assertEquals(1, collect.size());
@@ -138,40 +125,62 @@ public class FullTextSearchRepositoryImplTest {
         assertEquals(1, matchingItems.size());
     }
 
-    private static class TestTeam implements FullTextSearchableItem {
+    @Test
+    public void testFindingTeamBySynonymNameWhenDictionaryEntryHasIdentifier() {
 
-        private final String id;
-        private final List<String> names;
-        private final boolean isPlaceHolder;
+        final SynonymsDictionary synonymsDictionary = new SynonymsDictionaryImpl();
 
-        public TestTeam(String id, String name) {
-            this.id = id;
-            this.names = List.of(name);
-            this.isPlaceHolder = false;
-        }
+        final String synonym1 = "AMTO";
+        final String synonym2 = "AT";
+        final List<String> synonyms = List.of(synonym1, synonym2);
 
+        final SynonymsEntry synonymsForTeam4 = new SynonymsEntry(team4.getIdentifier(), synonyms);
 
-        public TestTeam(String id, List<String> names) {
-            this.id = id;
-            this.names = names;
-            this.isPlaceHolder = false;
-        }
+        synonymsDictionary.setEntry(synonymsForTeam4);
 
-        public TestTeam(String id, String name, boolean isPlaceHolder) {
-            this.id = id;
-            this.names = List.of(name);
-            this.isPlaceHolder = isPlaceHolder;
-        }
+        final FullTextSearchableItemFactory<TestTeam> fullTextSearchableItemFactory = TestTeam::new;
+        final FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo", synonymsDictionary, fullTextSearchableItemFactory);
 
-        @Override
-        public List<String> getSearchableNames() {
-            return names;
-        }
+        addAllTeams(trieCache);
 
-        @Override
-        public String getIdentifier() {
-            return id;
-        }
+        assertItemFoundForSynonym(synonym1, team4, trieCache);
+        assertItemFoundForSynonym(synonym2, team4, trieCache);
     }
 
+    @Test
+    public void testFindingTeamBySynonymNameWhenDictionaryEntryHasNoIdentifier() {
+
+        final SynonymsDictionary synonymsDictionary = new SynonymsDictionaryImpl();
+
+        final String teamName = team4.names.get(0);
+        final String synonym1 = "AMTO";
+        final String synonym2 = "AT";
+        final List<String> synonyms = List.of(teamName, synonym1, synonym2);
+
+        final SynonymsEntry synonymsForTeam4 = new SynonymsEntry(null, synonyms);
+
+        synonymsDictionary.setEntry(synonymsForTeam4);
+
+        final FullTextSearchableItemFactory<TestTeam> fullTextSearchableItemFactory = TestTeam::new;
+        final FullTextSearchRepositoryImpl<TestTeam> trieCache = new FullTextSearchRepositoryImpl<>("TestFullTextSearchRepo", synonymsDictionary, fullTextSearchableItemFactory);
+
+        addAllTeams(trieCache);
+
+        assertItemFoundForSynonym(synonym1, team4, trieCache);
+        assertItemFoundForSynonym(synonym2, team4, trieCache);
+    }
+
+    private void assertItemFoundForSynonym(String synonym, TestTeam expectedItem, FullTextSearchRepositoryImpl<TestTeam> trieCache) {
+        final List<TestTeam> matchingItems = trieCache.findMatchingItems(synonym, 100, predicateTrue);
+        assertEquals(1, matchingItems.size());
+        assertEquals(expectedItem.getIdentifier(), matchingItems.get(0).getIdentifier());
+    }
+
+    private void addAllTeams(FullTextSearchRepositoryImpl<TestTeam> trieCache) {
+        trieCache.addItem(team1);
+        trieCache.addItem(team2);
+        trieCache.addItem(team3);
+        trieCache.addItem(team4);
+        trieCache.addItem(team5);
+    }
 }

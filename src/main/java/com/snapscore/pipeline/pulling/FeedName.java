@@ -8,15 +8,15 @@ import java.util.Objects;
  * then the provider implementation should define an enum for these three (e.g. STAGES_FEED, STAGE_EVENTS_FEED, EVENT_DETAILS_FEED) and each of them will have a feed url template mapped to them.
  * FeedName then takes in one such value identifying the name of the feed.
  */
-public class FeedName<S extends Enum<S>> {
+public class FeedName {
 
-    private final Enum<S> name;
+    private final Enum<?> name;
 
-    public FeedName(Enum<S> name) {
+    public FeedName(Enum<?> name) {
         this.name = name;
     }
 
-    public Enum<S> getName() {
+    public Enum<?> getName() {
         return name;
     }
 
@@ -24,7 +24,7 @@ public class FeedName<S extends Enum<S>> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof FeedName)) return false;
-        FeedName<?> feedName = (FeedName<?>) o;
+        FeedName feedName = (FeedName) o;
         return Objects.equals(name, feedName.name);
     }
 

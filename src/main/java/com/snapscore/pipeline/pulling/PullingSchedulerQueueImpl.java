@@ -5,6 +5,7 @@ import com.snapscore.pipeline.pulling.http.HttpClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -28,19 +29,28 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
     public static final Duration PERIODIC_PULL_NEXT_TRIGGER_INTERVAL = Duration.ofMillis(5);
     private final Duration periodicPullNextTriggerInterval;
     private volatile Supplier<LocalDateTime> nowSupplier;
+    private final boolean ignoreDelayedRequests;
 
     public PullingSchedulerQueueImpl(HttpClient httpClient,
                                      WaitingRequestsTracker waitingRequestsTracker,
                                      RequestsPerSecondCounter requestsPerSecondCounter,
                                      Comparator<FeedRequest> requestsPrioritizingComparator) {
+        this(httpClient, waitingRequestsTracker, requestsPerSecondCounter, requestsPrioritizingComparator, false);
+    }
+
+    public PullingSchedulerQueueImpl(HttpClient httpClient,
+                                     WaitingRequestsTracker waitingRequestsTracker,
+                                     RequestsPerSecondCounter requestsPerSecondCounter,
+                                     Comparator<FeedRequest> requestsPrioritizingComparator,
+                                     boolean ignoreDelayedRequests) {
         this(
                 httpClient,
                 waitingRequestsTracker,
                 requestsPerSecondCounter,
                 requestsPrioritizingComparator,
                 PERIODIC_PULL_NEXT_TRIGGER_INTERVAL, // sensible default
-                LocalDateTime::now
-        );
+                LocalDateTime::now,
+                ignoreDelayedRequests);
     }
 
     /**
@@ -48,23 +58,34 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
      * package private access is intentional
      *
      * @param periodicPullNextTriggerInterval helps testability
-     * @param nowSupplier              helps testability
+     * @param nowSupplier                     helps testability
+     * @param ignoreDelayedRequests
      */
     PullingSchedulerQueueImpl(HttpClient httpClient,
                               WaitingRequestsTracker waitingRequestsTracker,
                               RequestsPerSecondCounter requestsPerSecondCounter,
                               Comparator<FeedRequest> requestsPrioritizingComparator,
                               Duration periodicPullNextTriggerInterval,
-                              Supplier<LocalDateTime> nowSupplier) {
+                              Supplier<LocalDateTime> nowSupplier,
+                              boolean ignoreDelayedRequests) {
         this.httpClient = httpClient;
         this.waitingRequestsTracker = waitingRequestsTracker;
         this.requestsPerSecondCounter = requestsPerSecondCounter;
         this.requestsQueue = new PriorityBlockingQueue<>(100, QueueFeedRequest.makeComparatorFrom(requestsPrioritizingComparator));
         this.periodicPullNextTriggerInterval = periodicPullNextTriggerInterval;
         this.nowSupplier = nowSupplier;
+        this.ignoreDelayedRequests = ignoreDelayedRequests;
         schedulePeriodicPullNextTrigger();
     }
 
+    PullingSchedulerQueueImpl(HttpClient httpClient,
+                              WaitingRequestsTracker waitingRequestsTracker,
+                              RequestsPerSecondCounter requestsPerSecondCounter,
+                              Comparator<FeedRequest> requestsPrioritizingComparator,
+                              Duration periodicPullNextTriggerInterval,
+                              Supplier<LocalDateTime> nowSupplier) {
+        this(httpClient, waitingRequestsTracker, requestsPerSecondCounter, requestsPrioritizingComparator, periodicPullNextTriggerInterval, nowSupplier, false);
+    }
 
     private void schedulePeriodicPullNextTrigger() {
         Flux.interval(periodicPullNextTriggerInterval, periodicPullNextTriggerInterval)
@@ -103,7 +124,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
     }
 
     boolean shouldMakeRequest(FeedRequest feedRequest) {
-        return !waitingRequestsTracker.isAwaitingResponse(feedRequest) || isAwaitingForTooLong(feedRequest);
+        return (!waitingRequestsTracker.isAwaitingResponse(feedRequest) && !(ignoreDelayedRequests && waitingRequestsTracker.isAwaitingRetry(feedRequest))) || isAwaitingForTooLong(feedRequest);
     }
 
     private boolean isAwaitingForTooLong(FeedRequest feedRequest) {
@@ -126,7 +147,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
         try {
             QueueFeedRequest nextQueueRequest = requestsQueue.peek();
             while (nextQueueRequest != null && requestsPerSecondCounter.incrementIfRequestWithinLimitAndGet(nowSupplier.get())) {
-                requestsQueue.poll(); // remove from head
+                requestsQueue.poll(); // remove from queue head
                 scheduleSinglePull(nextQueueRequest.getFeedRequest(),
                         nextQueueRequest.getPullResultConsumer(),
                         nextQueueRequest.getPullErrorConsumer(),
@@ -146,16 +167,17 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
 
         AtomicBoolean isRetry = new AtomicBoolean(false);
 
-        Mono.just(1) // we need a starting value
-                .map(dummy -> handleRequestIfRetried(isRetry, request))
-                .flatMap(canProceed -> Mono.fromFuture(httpClient.getAsync(request)))
+        Mono.just(request)
+                .map(request0 -> handleRequestIfRetried(isRetry, request0))
+                .flatMap(canProceed -> Mono.fromFuture(httpClient.getAsync(request))) // if we got her eit means that the previous step passed and emmited 'true'
                 .publishOn(Schedulers.parallel())   // emitted results need to be published on parallel scheduler so we do not execute pulled data processing on the httpClient's own threadpool
                 .onErrorMap(error -> {
                     logRequestError(request, error);
                     waitingRequestsTracker.untrackProcessed(request);   // if an error happened and will be retried at some point, we want to untrack the request so that other requests coming in for the same url do not get ignored
+                    waitingRequestsTracker.trackAwaitingRetry(request);
                     return error;
                 })
-                .retryBackoff(request.getNumOfRetries(), request.getRetryBackoff())
+                .retryWhen(Retry.backoff(request.getNumOfRetries(), request.getRetryBackoff()))
                 .onErrorResume(error -> {
                     logDroppingRetrying(request, error);
                     logEnqueuedRequestCount();
@@ -183,6 +205,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
         if (isRetry.get()) {
             if (requestsPerSecondCounter.incrementIfRequestWithinLimitAndGet(nowSupplier.get())) {
                 logRetry(request);
+                waitingRequestsTracker.untrackRetried(request);
                 waitingRequestsTracker.trackAwaitingResponse(request);
                 return Mono.just(true);
             } else {
@@ -190,7 +213,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
                 logDelayedRetry(request);
                 return Mono.just(false)
                         .delayElement(periodicPullNextTriggerInterval)
-                        .flatMap(dummy -> handleRequestIfRetried(isRetry, request)); // call this method again ... until we are within limit at some point
+                        .flatMap(dummy -> handleRequestIfRetried(isRetry, request)); // call this method again ... kind of recursively ... until we are within limit at some point
 
             }
         } else {

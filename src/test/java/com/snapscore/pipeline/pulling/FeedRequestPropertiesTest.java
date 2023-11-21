@@ -17,7 +17,7 @@ public class FeedRequestPropertiesTest {
     @Test
     public void basic() {
 
-        FeedRequestProperties<FeedRequestPropertyTypes> properties = new FeedRequestProperties<>();
+        FeedRequestProperties properties = new FeedRequestProperties();
 
         String fileName = "some/file.txt";
         int teamId = 155;

@@ -20,4 +20,11 @@ public interface WaitingRequestsTracker {
 
     int countOfRequestsAwaitingResponse();
 
+    boolean isAwaitingRetry(FeedRequest feedRequest);
+
+    void trackAwaitingRetry(FeedRequest feedRequest);
+
+    void untrackRetried(FeedRequest feedRequest);
+
+
 }

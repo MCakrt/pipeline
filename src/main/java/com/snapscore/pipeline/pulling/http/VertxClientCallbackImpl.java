@@ -73,7 +73,6 @@ public class VertxClientCallbackImpl extends AbstractClientCallback implements V
         } catch (Exception e){
             logger.decorateSetup(mdc -> mdc.anyId(feedRequest.getUuid())).error("Error while processing response for: {}", feedRequest.toStringBasicInfo(), e);
             emitFailedRequestException();
-        } finally {
         }
     }
 

@@ -1,0 +1,27 @@
+name: Pipeline
+
+on: push
+
+jobs:
+  build:
+    # OS
+    runs-on: ubuntu-22.04
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '19'
+
+      - name: Gradle build
+        run: ./gradlew clean test build
+
+      - name: Publish
+        if: github.ref_name == 'master'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish

@@ -9,7 +9,7 @@ public class RequestsPerSecondCounterImpl implements RequestsPerSecondCounter {
     public static final long MILLIS_BETWEEN_CORRESPOND_RQS_IN_TWO_CONSECUTIVE_SECONDS = 1000L;
     private static final int MAX_ALLOWED_REQUESTS_PER_SECOND_LIMIT = 100_000; // due to array size limits in Java we need to cap the size of this
     private final int requestsPerSecondLimit;
-    private final LocalDateTime requestsTimesWithinSecond[];
+    private final LocalDateTime[] requestsTimesWithinSecond;
     private final AtomicInteger requestsPerSecondCounter = new AtomicInteger(0);
 
     /**
@@ -20,11 +20,7 @@ public class RequestsPerSecondCounterImpl implements RequestsPerSecondCounter {
      */
     RequestsPerSecondCounterImpl(int requestsPerSecondLimit, LocalDateTime initialPrevRequestTime) {
 
-        if (MAX_ALLOWED_REQUESTS_PER_SECOND_LIMIT < requestsPerSecondLimit) {
-            this.requestsPerSecondLimit = MAX_ALLOWED_REQUESTS_PER_SECOND_LIMIT;
-        } else {
-            this.requestsPerSecondLimit = requestsPerSecondLimit;
-        }
+        this.requestsPerSecondLimit = Math.min(MAX_ALLOWED_REQUESTS_PER_SECOND_LIMIT, requestsPerSecondLimit);
 
         // initialise with default starting time
         this.requestsTimesWithinSecond = new LocalDateTime[this.requestsPerSecondLimit];
@@ -76,8 +72,7 @@ public class RequestsPerSecondCounterImpl implements RequestsPerSecondCounter {
     }
 
     private boolean isRequestWithinLimit(LocalDateTime now) {
-        boolean result = hasWholeSecondPassedSinceCorrespondingRequestInPrevSecond(now);
-        return result;
+        return hasWholeSecondPassedSinceCorrespondingRequestInPrevSecond(now);
     }
 
     private boolean hasWholeSecondPassedSinceCorrespondingRequestInPrevSecond(LocalDateTime now) {

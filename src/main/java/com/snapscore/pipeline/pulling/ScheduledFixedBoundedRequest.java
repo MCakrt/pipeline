@@ -3,7 +3,7 @@ package com.snapscore.pipeline.pulling;
 import reactor.core.Disposable;
 
 /**
- * ncapsulates request that is sent a bounded number of times
+ * encapsulates request that is sent a bounded number of times
  */
 public class ScheduledFixedBoundedRequest<K> extends ScheduledPulling<K> {
 

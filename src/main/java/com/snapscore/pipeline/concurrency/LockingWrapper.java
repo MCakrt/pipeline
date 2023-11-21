@@ -1,4 +1,4 @@
-package com.snapscore.pipeline.textsearch;
+package com.snapscore.pipeline.concurrency;
 
 import com.snapscore.pipeline.logging.Logger;
 
@@ -35,7 +35,7 @@ public class LockingWrapper {
         } finally {
             readLock.unlock();
         }
-        return Collections.EMPTY_LIST;
+        return Collections.emptyList();
     }
 
     public static <T> List<T> lockAndGetList(ReentrantReadWriteLock.ReadLock readLock, Supplier<List<T>> supplier, String errMsg, Object ... errMsgDetails) {
@@ -47,7 +47,7 @@ public class LockingWrapper {
         } finally {
             readLock.unlock();
         }
-        return Collections.EMPTY_LIST;
+        return Collections.emptyList();
     }
 
     public static <K, T> Map<K, Map<K, T>> lockAndGetNestedMap(ReentrantReadWriteLock.ReadLock readLock, Supplier<Map<K, Map<K, T>>> supplier, String errMsg, Object ... errMsgDetails) {
@@ -59,7 +59,7 @@ public class LockingWrapper {
         } finally {
             readLock.unlock();
         }
-        return Collections.EMPTY_MAP;
+        return Collections.emptyMap();
     }
 
     public static boolean lockAndWriteAndGetBoolean(ReentrantReadWriteLock.WriteLock writeLock, Supplier<Boolean> supplier, String errMsg, Object ... errMsgDetails) {
@@ -71,7 +71,7 @@ public class LockingWrapper {
         } finally {
             writeLock.unlock();
         }
-        return Boolean.FALSE.booleanValue();
+        return false;
     }
 
     public static <T> void lockAndWrite(ReentrantReadWriteLock.WriteLock writeLock, Consumer<T> consumer, T data, String errMsg, Object ... errMsgDetails) {

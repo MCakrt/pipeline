@@ -3,7 +3,9 @@ package com.snapscore.pipeline.concurrency;
 import com.snapscore.pipeline.logging.Logger;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Scheduler;
+import reactor.util.annotation.Nullable;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -24,26 +26,30 @@ public class InputProcessingFluxRunner<I, R> extends InputProcessingRunner<I, R>
 
     public InputProcessingFluxRunner(I input,
                                      Function<I, Flux<R>> processingFluxCreator,
-                                     Consumer<? super R> subscribeConsumer,
-                                     Consumer<? super Throwable> subscribeErrorConsumer,
+                                     @Nullable Consumer<? super R> subscribeConsumer,
+                                     @Nullable Consumer<? super Throwable> subscribeErrorConsumer,
                                      LoggingInfo loggingInfo,
-                                     Scheduler subscribeOnScheduler) {
+                                     @Nullable Scheduler subscribeOnScheduler) {
         this.input = input;
         this.processingFluxCreator = processingFluxCreator;
-        this.subscribeConsumer = subscribeConsumer;
-        this.subscribeErrorConsumer = subscribeErrorConsumer;
+        this.subscribeConsumer = Objects.requireNonNullElse(subscribeConsumer, i -> {});
+        this.subscribeErrorConsumer = Objects.requireNonNullElse(subscribeErrorConsumer, e -> {
+            logger.error("Error processing input of type {}", input.getClass().getSimpleName(), e);
+        });
         this.subscribeOnScheduler = subscribeOnScheduler;
         this.loggingInfo = loggingInfo;
     }
 
     @Override
     protected void run(Runnable onTerminateHook, Runnable onCancelHook, long itemEnqueuedTs) {
-        Consumer<? super R> subscribeConsumerWrapped = getSubscribeConsumerWrapped(itemEnqueuedTs);
-        processingFluxCreator.apply(input)
+        final Consumer<? super R> subscribeConsumerWrapped = getSubscribeConsumerWrapped(itemEnqueuedTs);
+        Flux<R> flux = processingFluxCreator.apply(input)
                 .doOnTerminate(onTerminateHook)
-                .doOnCancel(onCancelHook)
-                .subscribeOn(subscribeOnScheduler)
-                .subscribe(subscribeConsumerWrapped, subscribeErrorConsumer);
+                .doOnCancel(onCancelHook);
+        if (subscribeOnScheduler != null) {
+            flux = flux.subscribeOn(subscribeOnScheduler);
+        }
+        flux.subscribe(subscribeConsumerWrapped, subscribeErrorConsumer);
     }
 
     private Consumer<? super R> getSubscribeConsumerWrapped(long itemEnqueuedTs) {

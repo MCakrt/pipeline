@@ -1,14 +1,12 @@
 package com.snapscore.pipeline.pulling;
 
 import com.snapscore.pipeline.logging.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Random;
 
 public class RetryDelaySupplierRandomised implements RetryDelaySupplier {
 
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(RetryDelaySupplierRandomised.class);
     private static final Logger logger = Logger.setup(RetryDelaySupplierRandomised.class);
 
     private final long minRetryDelayMillis;

@@ -5,7 +5,10 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Random;
 import java.util.function.Predicate;
 
 public class FullTextSearchRepositoryImplPerformanceTest {
@@ -77,10 +80,10 @@ public class FullTextSearchRepositoryImplPerformanceTest {
         runCacheQueries(itemsCache, 100, searchTexts);
 
         start = System.currentTimeMillis();
-        int searchCount = 1000;
+        int searchCount = 100000;
         List<Integer> word = runCacheQueries(itemsCache, searchCount, searchTexts);
         end = System.currentTimeMillis();
-        System.out.println("Query duration: " + (end - start) + " ms for " + searchCount + " searches thorugh cache of size " + cacheSize);
+        System.out.println("Query duration: " + (end - start) + " ms for " + searchCount + " searches through cache of size " + cacheSize);
         System.out.println("Sum of found counts: " + word.stream().mapToInt(i -> i).sum());
     }
 

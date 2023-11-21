@@ -43,7 +43,7 @@ public class PullingSchedulerImpl implements PullingScheduler {
             return feedRequestSupplier.get();
         } catch (Exception e) {
             logger.error("Error creating feedRequests!", e);
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
     }
 
@@ -110,7 +110,7 @@ public class PullingSchedulerImpl implements PullingScheduler {
         }
 
         Disposable disposable = Flux.concat(monoList).subscribe(logger::info);
-        return new ScheduledFixedBoundedRequest<K>(scheduledPullingKey, feedRequest, disposable, repeatTimes);
+        return new ScheduledFixedBoundedRequest<>(scheduledPullingKey, feedRequest, disposable, repeatTimes);
     }
 
     // must be synchronized -> is called from multiple threads and accesses data that is not thread-safe and operations on it need to be atomic

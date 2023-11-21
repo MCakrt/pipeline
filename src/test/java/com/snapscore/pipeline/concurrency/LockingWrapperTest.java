@@ -1,4 +1,4 @@
-package com.snapscore.pipeline.textsearch;
+package com.snapscore.pipeline.concurrency;
 
 import org.junit.Before;
 import org.junit.Ignore;

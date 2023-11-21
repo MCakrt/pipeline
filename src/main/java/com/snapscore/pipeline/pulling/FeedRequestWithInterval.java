@@ -110,7 +110,7 @@ public class FeedRequestWithInterval extends FeedRequest {
             this.priority = priority;
             this.numOfRetries = numOfRetries;
             this.url = url;
-            this.properties = new FeedRequestProperties<>();
+            this.properties = new FeedRequestProperties();
             this.pullInterval = pullInterval;
         }
 

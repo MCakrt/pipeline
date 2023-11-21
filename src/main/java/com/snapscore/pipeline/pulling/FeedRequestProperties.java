@@ -8,20 +8,20 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Contains additional details about the request, that is useful for e.g. making the right file name ...
  */
-public class FeedRequestProperties<T extends Enum<T>> {
+public class FeedRequestProperties {
 
-    private final Map<Enum<T>, Object> properties = new ConcurrentHashMap<>(2);
+    private final Map<Enum<?>, Object> properties = new ConcurrentHashMap<>(2);
 
     public FeedRequestProperties() {
     }
 
-    void putProperty(T propertyType, Object value) {
+    void putProperty(Enum<?> propertyType, Object value) {
         if (propertyType != null && value != null) {
             properties.put(propertyType, value);
         }
     }
 
-    public <V> Optional<V> getPropertyValue(Enum<T> propertyType, Class<V> valueType) {
+    public <V> Optional<V> getPropertyValue(Enum<?> propertyType, Class<V> valueType) {
         Object prop = properties.get(propertyType);
         if (prop != null) {
             V cast = valueType.cast(prop);
@@ -35,7 +35,7 @@ public class FeedRequestProperties<T extends Enum<T>> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof FeedRequestProperties)) return false;
-        FeedRequestProperties<?> that = (FeedRequestProperties<?>) o;
+        FeedRequestProperties that = (FeedRequestProperties) o;
         return Objects.equals(properties, that.properties);
     }
 
