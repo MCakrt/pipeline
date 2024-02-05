@@ -124,7 +124,13 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
     }
 
     boolean shouldMakeRequest(FeedRequest feedRequest) {
-        return (!waitingRequestsTracker.isAwaitingResponse(feedRequest) && !(ignoreDelayedRequests && waitingRequestsTracker.isAwaitingRetry(feedRequest))) || isAwaitingForTooLong(feedRequest);
+        final boolean isAwaitingResponse = waitingRequestsTracker.isAwaitingResponse(feedRequest);
+        final boolean isAwaitingRetry = waitingRequestsTracker.isAwaitingRetry(feedRequest);
+        final boolean isAwaitingForTooLong = isAwaitingForTooLong(feedRequest);
+        final boolean result = (!isAwaitingResponse && !(ignoreDelayedRequests && isAwaitingRetry)) || isAwaitingForTooLong;
+        if (!result)
+            logger.debug("Ignored feedRequest isAwaitingResponse={}, ignoreDelayedRequests={}, isAwaitingRetry={}, isAwaitingForTooLong={}", isAwaitingResponse, ignoreDelayedRequests, isAwaitingRetry, isAwaitingForTooLong);
+        return result;
     }
 
     private boolean isAwaitingForTooLong(FeedRequest feedRequest) {
@@ -169,7 +175,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
 
         Mono.just(request)
                 .map(request0 -> handleRequestIfRetried(isRetry, request0))
-                .flatMap(canProceed -> Mono.fromFuture(httpClient.getAsync(request))) // if we got her eit means that the previous step passed and emmited 'true'
+                .flatMap(canProceed -> Mono.fromFuture(httpClient.getAsync(request))) // if we got here it means that the previous step passed and emmited 'true'
                 .publishOn(Schedulers.parallel())   // emitted results need to be published on parallel scheduler so we do not execute pulled data processing on the httpClient's own threadpool
                 .onErrorMap(error -> {
                     logRequestError(request, error);
@@ -201,7 +207,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
         // we have checked that they are within limit so that is ok ...
         // ... but when requests fail and are retried by the Reactor Flux we need to check again
         // the retry because it happens at some later point and we might have run out of rqs / sec for that moment
-        // ->>> WE NEED TO MAKE SURE THAT RETRIED REQUEST ALSO RESPECT THE RQs/SEC LIMIT + THAT THEY ARE TRACKED CORRECTLY
+        // ->>> WE NEED TO MAKE SURE THAT RETRIED REQUESTS ALSO RESPECT THE RQs/SEC LIMIT + THAT THEY ARE TRACKED CORRECTLY
         if (isRetry.get()) {
             if (requestsPerSecondCounter.incrementIfRequestWithinLimitAndGet(nowSupplier.get())) {
                 logRetry(request);

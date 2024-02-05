@@ -73,6 +73,7 @@ public class FeedRequestWithInterval extends FeedRequest {
     public String toStringBasicInfo() {
         return "[uuid='" + uuid + '\'' +
                 ", url='" + urlForLogging + '\'' +
+                ", interval=" + pullInterval +
                 ']'
                 ;
     }
