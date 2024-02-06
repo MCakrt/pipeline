@@ -5,6 +5,7 @@ import com.snapscore.pipeline.logging.Logger;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 public class WaitingRequestsTrackerImpl implements WaitingRequestsTracker {
@@ -14,6 +15,10 @@ public class WaitingRequestsTrackerImpl implements WaitingRequestsTracker {
     private final Function<FeedRequest, String> deduplicatingFeedRequestKeyMaker;
     private final ConcurrentMap<String, TrackedRequest> requestsAwaitingToBePulledByUrlMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, TrackedRequest> requestsAwaitingToBeRetriedByUrlMap = new ConcurrentHashMap<>();
+
+    private final AtomicInteger errors = new AtomicInteger(0);
+    private final AtomicInteger successfulRetries = new AtomicInteger(0);
+    private final AtomicInteger failedRetries = new AtomicInteger(0);
 
     /**
      * @param deduplicatingFeedRequestKeyMaker must return a string that will be used as an identifier
@@ -69,19 +74,24 @@ public class WaitingRequestsTrackerImpl implements WaitingRequestsTracker {
 
     @Override
     public void untrackProcessed(FeedRequest feedRequest) {
-        untrack(feedRequest, requestsAwaitingToBePulledByUrlMap);
+        untrack(feedRequest, requestsAwaitingToBePulledByUrlMap, true);
     }
 
     @Override
     public void untrackRetried(FeedRequest feedRequest) {
-        untrack(feedRequest, requestsAwaitingToBeRetriedByUrlMap);
+        untrack(feedRequest, requestsAwaitingToBeRetriedByUrlMap, true);
     }
 
-    private void untrack(FeedRequest feedRequest, ConcurrentMap<String, TrackedRequest> urlMap) {
+    @Override
+    public void untrackRetriedIfPresent(FeedRequest feedRequest) {
+        untrack(feedRequest, requestsAwaitingToBeRetriedByUrlMap, false);
+    }
+
+    private void untrack(FeedRequest feedRequest, ConcurrentMap<String, TrackedRequest> urlMap, boolean showWarning) {
         try {
             TrackedRequest removedRq = urlMap.remove(makeKey(feedRequest));
             if (removedRq == null) {
-                logger.decorateSetup(mdc -> mdc.anyId(feedRequest.getUuid())).warn("FeedRequest not present in the tracker but it should be - nothing to untrack: {}", feedRequest.toStringBasicInfo());
+                if (showWarning) logger.decorateSetup(mdc -> mdc.anyId(feedRequest.getUuid())).warn("FeedRequest not present in the tracker but it should be - nothing to untrack: {}", feedRequest.toStringBasicInfo());
             } else {
                 logger.decorateSetup(mdc -> mdc.anyId(feedRequest.getUuid())).info("Untracked feedRequest: {}", feedRequest.toStringBasicInfo());
             }
@@ -104,4 +114,18 @@ public class WaitingRequestsTrackerImpl implements WaitingRequestsTracker {
         }
     }
 
+    @Override
+    public void addError() {
+        errors.incrementAndGet();
+    }
+
+    @Override
+    public void addSuccessfulRetry() {
+        successfulRetries.incrementAndGet();
+    }
+
+    @Override
+    public void addFailedRetry() {
+        failedRetries.incrementAndGet();
+    }
 }

@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -129,7 +130,8 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
         final boolean isAwaitingForTooLong = isAwaitingForTooLong(feedRequest);
         final boolean result = (!isAwaitingResponse && !(ignoreDelayedRequests && isAwaitingRetry)) || isAwaitingForTooLong;
         if (!result)
-            logger.debug("Ignored feedRequest isAwaitingResponse={}, ignoreDelayedRequests={}, isAwaitingRetry={}, isAwaitingForTooLong={}", isAwaitingResponse, ignoreDelayedRequests, isAwaitingRetry, isAwaitingForTooLong);
+            // debug would be better here, but for some reason it does not work
+            logger.info("Ignored feedRequest isAwaitingResponse={}, ignoreDelayedRequests={}, isAwaitingRetry={}, isAwaitingForTooLong={}", isAwaitingResponse, ignoreDelayedRequests, isAwaitingRetry, isAwaitingForTooLong);
         return result;
     }
 
@@ -178,20 +180,24 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
                 .flatMap(canProceed -> Mono.fromFuture(httpClient.getAsync(request))) // if we got here it means that the previous step passed and emmited 'true'
                 .publishOn(Schedulers.parallel())   // emitted results need to be published on parallel scheduler so we do not execute pulled data processing on the httpClient's own threadpool
                 .onErrorMap(error -> {
+                    waitingRequestsTracker.addError();
                     logRequestError(request, error);
                     waitingRequestsTracker.untrackProcessed(request);   // if an error happened and will be retried at some point, we want to untrack the request so that other requests coming in for the same url do not get ignored
                     waitingRequestsTracker.trackAwaitingRetry(request);
                     return error;
                 })
-                .retryWhen(Retry.backoff(request.getNumOfRetries(), request.getRetryBackoff()))
+                .retryWhen(Retry.fixedDelay(request.getNumOfRetries(), request.getRetryBackoff()))
+//                .retryWhen(Retry.backoff(request.getNumOfRetries(), request.getRetryBackoff()))
                 .onErrorResume(error -> {
+                    // note - do not untrack request here, it should already be untracked by onErrorMap() above
+                    waitingRequestsTracker.untrackRetriedIfPresent(request);
                     logDroppingRetrying(request, error);
                     logEnqueuedRequestCount();
                     notifyOnErrorCallback(request, pullErrorConsumer, error);
                     return Mono.empty();
-                    // note - do not untrack request here, it should already be untracked by onErrorMap() above
                 })
                 .doOnNext(data -> {
+                    waitingRequestsTracker.untrackRetriedIfPresent(request);
                     waitingRequestsTracker.untrackProcessed(request);
                     logEnqueuedRequestCount();
                     logRequestProcessed(request, enqueuedTimestamp);
@@ -201,7 +207,7 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
     }
 
 
-    // returns true if te request is within limit. The returned value has no affect though on subsequent items in the Mono chain
+    // returns true if the request is within limit. The returned value has no affect though on subsequent items in the Mono chain
     private Mono<Boolean> handleRequestIfRetried(AtomicBoolean isRetry, FeedRequest request) {
         // done like this with AtomicBoolean because when we poll requests from requestsQueue
         // we have checked that they are within limit so that is ok ...
@@ -209,15 +215,17 @@ public class PullingSchedulerQueueImpl implements PullingSchedulerQueue {
         // the retry because it happens at some later point and we might have run out of rqs / sec for that moment
         // ->>> WE NEED TO MAKE SURE THAT RETRIED REQUESTS ALSO RESPECT THE RQs/SEC LIMIT + THAT THEY ARE TRACKED CORRECTLY
         if (isRetry.get()) {
-            if (requestsPerSecondCounter.incrementIfRequestWithinLimitAndGet(nowSupplier.get())) {
-                logRetry(request);
-                waitingRequestsTracker.untrackRetried(request);
-                waitingRequestsTracker.trackAwaitingResponse(request);
-                return Mono.just(true);
+             if (requestsPerSecondCounter.incrementIfRequestWithinLimitAndGet(nowSupplier.get())) {
+                 waitingRequestsTracker.addSuccessfulRetry();
+                 logRetry(request);
+                 waitingRequestsTracker.untrackRetried(request);
+                 waitingRequestsTracker.trackAwaitingResponse(request);
+                 return Mono.just(true);
             } else {
-                // repeat until we are within limit ...
-                logDelayedRetry(request);
-                return Mono.just(false)
+                 // repeat until we are within limit ...
+                 waitingRequestsTracker.addFailedRetry();
+                 logDelayedRetry(request);
+                 return Mono.just(false)
                         .delayElement(periodicPullNextTriggerInterval)
                         .flatMap(dummy -> handleRequestIfRetried(isRetry, request)); // call this method again ... kind of recursively ... until we are within limit at some point
 

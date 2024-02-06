@@ -331,7 +331,7 @@ public class PullingSchedulerImplTest {
         Thread.sleep(100);
 
         assertFalse(waitingRequestsTracker.isAwaitingResponse(feedRequest));
-        assertTrue(waitingRequestsTracker.isAwaitingRetry(feedRequest));
+        assertFalse(waitingRequestsTracker.isAwaitingRetry(feedRequest));
     }
 
     @Test
@@ -342,7 +342,7 @@ public class PullingSchedulerImplTest {
         final PullingSchedulerQueue pullingSchedulerQueue =  new PullingSchedulerQueueImpl(httpClientMock, waitingRequestsTracker, requestsPerSecondCounter, FeedRequest.DEFAULT_PRIORITY_COMPARATOR, Duration.ofDays(1), () -> LocalDateTime.now(), true);
         pullingScheduler = new PullingSchedulerImpl(pullingSchedulerQueue);
 
-        final Duration retryDelay = Duration.ZERO;
+        final Duration retryDelay = Duration.ofSeconds(1);
         FeedRequest feedRequest = FeedRequest.newBuilder(MATCH_DETAIL_FEED_NAME, FeedPriorityEnum.MEDIUM, 9, "url_1").setRetryDelaySupplier(rq -> retryDelay).build();
         Consumer<PullResult> pullResultConsumerMock = Mockito.mock(Consumer.class);
 
@@ -439,6 +439,26 @@ public class PullingSchedulerImplTest {
 
             @Override
             public void untrackRetried(FeedRequest feedRequest) {
+
+            }
+
+            @Override
+            public void untrackRetriedIfPresent(FeedRequest feedRequest) {
+
+            }
+
+            @Override
+            public void addError() {
+
+            }
+
+            @Override
+            public void addSuccessfulRetry() {
+
+            }
+
+            @Override
+            public void addFailedRetry() {
 
             }
         };

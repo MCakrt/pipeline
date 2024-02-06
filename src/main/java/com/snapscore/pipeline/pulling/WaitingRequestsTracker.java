@@ -26,5 +26,13 @@ public interface WaitingRequestsTracker {
 
     void untrackRetried(FeedRequest feedRequest);
 
+    void untrackRetriedIfPresent(FeedRequest feedRequest);
+
+    void addError();
+
+    void addSuccessfulRetry();
+
+    void addFailedRetry();
+
 
 }
