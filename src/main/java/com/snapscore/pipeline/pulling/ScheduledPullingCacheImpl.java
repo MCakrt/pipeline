@@ -93,7 +93,6 @@ public class ScheduledPullingCacheImpl<K, V extends ScheduledPulling<K>> impleme
     public boolean isPullingScheduledFor(K scheduledPullingKey) {
         if (scheduledPullingKey != null) {
             V scheduledPulling = scheduledPullingsMap.get(scheduledPullingKey);
-            // TODO id pulling is cancelled and there is still mapping to the key it is a  problem so we should log it ....
             return scheduledPulling != null && !scheduledPulling.isCancelled();
         } else {
             logger.warn("isPullingScheduledFor() got null scheduledPullingKey!");

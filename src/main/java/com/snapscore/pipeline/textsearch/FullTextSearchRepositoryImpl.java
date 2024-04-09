@@ -408,7 +408,7 @@ public class FullTextSearchRepositoryImpl<T extends FullTextSearchableItem> impl
                     .flatMap(upperCaseName -> Arrays.stream(SPACE_PATTERN.split(upperCaseName)))
                     .distinct()
                     .sorted(STRING_COMPARATOR) // IMPORTANT! needs to be sorted for better search performance; the search algorithm relies on the being sorted!
-                    .map(word -> word.intern()) // intern all words as there are many repetitions // TODO make interning optional
+                    .map(word -> word.intern()) // intern all words as there are many repetitions
                     .collect(Collectors.toList());
         }
 

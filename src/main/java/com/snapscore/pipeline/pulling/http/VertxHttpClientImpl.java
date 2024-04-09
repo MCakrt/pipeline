@@ -48,8 +48,8 @@ public class VertxHttpClientImpl implements HttpClient {
             io.vertx.core.http.HttpClient client = clients.get(feedRequest.getPriority());
 
             RequestOptions requestOptions = new RequestOptions()
-                    .setHost(httpClientConfig.host()) // TODO actually it might be good to have this as part of the request as well and if available then it should overwrite the general config value?
-                    .setPort(httpClientConfig.port()) // TODO actually it might be good to have this as part of the request as well and if available then it should overwrite the general config value?
+                    .setHost(httpClientConfig.host())
+                    .setPort(httpClientConfig.port())
                     .setURI(feedRequest.getUrl())
                     .setTimeout(httpClientConfig.readTimeout().toMillis())
                     .setMethod(HttpMethod.GET);

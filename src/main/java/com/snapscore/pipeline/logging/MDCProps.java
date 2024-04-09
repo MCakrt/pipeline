@@ -14,7 +14,7 @@ public class MDCProps {
     private final static String EVENT_ID_OF_PROVIDER_KEY_PATTERN = "event_id_prov_%s";
     private final static String STAGE_ID_OF_PROVIDER_KEY_PATTERN = "stage_id_prov_%s";
     private final static String TEAM_ID_OF_PROVIDER_KEY_PATTERN = "team_id_prov_%s_"; // tailing underscore is on purpose
-    private final static String PLAYER_ID_KEY = "player_id"; // TODO replace with pattern like other entity types ...
+    private final static String PLAYER_ID_KEY = "player_id";
     private final static String ANY_ID_KEY_PATTERN = "any_id_%s";
     private final static String EXECUTION_KEY = "execution";
     private final static String ANALYTICS_ID_KEY = "analytics_id";
@@ -393,8 +393,6 @@ public class MDCProps {
 
 
     // PLAYER IDS ========================================================
-
-    // TODO provide a map based approach ...
 
     public MDCProps pId(String playerId) {
         this.playerId = playerId;
