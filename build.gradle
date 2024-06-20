@@ -23,8 +23,8 @@ apply plugin: 'idea'
 apply plugin: 'maven-publish'
 apply plugin: 'com.github.johnrengelman.shadow'
 
-sourceCompatibility = 19.0
-targetCompatibility = 19.0
+sourceCompatibility = 22.0
+targetCompatibility = 22.0
 
 repositories {
     mavenCentral()
